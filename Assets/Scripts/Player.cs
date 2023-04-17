@@ -10,7 +10,15 @@ public class Player : MonoBehaviour
 
     public ushort Id { get; private set; }
     public string Username { get; private set; }
+
+    public PlayerMovement Movement => movement;
+
+    [SerializeField] private PlayerMovement movement;
     
+    private void OnDestroy()
+    {
+        list.Remove(Id);
+    }
     public static void Spawn(ushort id, string username)
     {
         foreach(Player otherPlayer in list.Values)
@@ -19,31 +27,21 @@ public class Player : MonoBehaviour
         }
         Player player = Instantiate(GameLogic.GameLogicInstance.PlayerPrefab, new Vector3(0f, 1f, 0f), Quaternion.identity).GetComponent<Player>();
         // the ? is like an if else statement, taking the first value, 'id' if true, or 'username' if false;
-        player.name = $"Player{id}({(string.IsNullOrEmpty(username) ? $"Guest{id}" : username)})";
+        player.name = $"Player{id}({(string.IsNullOrEmpty(username) ? $"Guest" : username)})";
         player.Id = id;
         player.Username = string.IsNullOrEmpty(username) ? $"Guest{id}" : username;
 
         player.SendSpawned();
         list.Add(id, player);
     }
-    private void OnDestroy()
-    {
-        list.Remove(Id);
-    }
   #region Messages
-      [MessageHandler((ushort)ClientToServerId.name)]
-    private static void Name(ushort fromClientId, Message message)
-    {
-        Spawn(fromClientId, message.GetString());
-    }
-
     private void SendSpawned()
     {
-        NetworkManager.NetworkManagerInstance.Server.SendToAll(AddSpawnData(Message.Create(MessageSendMode.Reliable,(ushort)ServerToClientId.playerSpawned)));
+        NetworkManager.NetworkManagerInstance.Server.SendToAll(AddSpawnData(Message.Create(MessageSendMode.Reliable,ServerToClientId.playerSpawned)));
     }
     private void SendSpawned(ushort toClientId)
     {
-        NetworkManager.NetworkManagerInstance.Server.Send(AddSpawnData(Message.Create(MessageSendMode.Reliable,(ushort)ServerToClientId.playerSpawned)), toClientId);
+        NetworkManager.NetworkManagerInstance.Server.Send(AddSpawnData(Message.Create(MessageSendMode.Reliable,ServerToClientId.playerSpawned)), toClientId);
 
     }
     private Message AddSpawnData(Message message)
@@ -54,5 +52,21 @@ public class Player : MonoBehaviour
 
         return message;
     }
+      [MessageHandler((ushort)ClientToServerId.name)]
+    private static void Name(ushort fromClientId, Message message)
+    {
+        Spawn(fromClientId, message.GetString());
+    }
+
+    [MessageHandler((ushort)ClientToServerId.input)]
+    private static void Input(ushort fromClientId, Message message)
+    {
+        if (list.TryGetValue(fromClientId, out Player player))
+        {
+            player.Movement.SetInput(message.GetBools(6), message.GetVector3());
+        }
+    }
+
+
   #endregion
 }

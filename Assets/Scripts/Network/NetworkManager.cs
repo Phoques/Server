@@ -5,12 +5,14 @@ using UnityEngine;
 //All of these scripts are what the package does automatically. (Mostly)
 public enum ServerToClientId : ushort
 {
-    playerSpawned = 1,
+    sync = 1,
+    playerSpawned,
+    playerMovement,
 }
-
-public enum ClientToServerId: ushort
+public enum ClientToServerId : ushort
 {
     name = 1,
+    input,
 }
 public class NetworkManager : MonoBehaviour
 {
@@ -45,6 +47,9 @@ public class NetworkManager : MonoBehaviour
     public Server Server { get; private set; }
     //ushort is a smaller int that starts at 0, cannot be in the negative (see website for more details regarding longs shorts ushorts ulongs https://learn.microsoft.com/en-us/dotnet/visual-basic/language-reference/data-types/)
     //port number aka something like 8080
+
+    public ushort CurrentTick { get; private set; } = 0;
+
     [SerializeField] private ushort s_port;
     //how many players we can connect aka how manay peeps can join 
     [SerializeField] private ushort s_maxClientCount;
@@ -71,6 +76,11 @@ public class NetworkManager : MonoBehaviour
     private void FixedUpdate()
     {
         Server.Update();
+
+        if (CurrentTick % 200 == 0)
+            SendSync();
+
+        CurrentTick++;
     }
     // When the game closes it kills connection to the server 
     private void OnApplicationQuit()
@@ -80,6 +90,18 @@ public class NetworkManager : MonoBehaviour
        private void PlayerLeft(object sender, ServerDisconnectedEventArgs e)
     {
         //When a player leaves a server Destroy the player object and remove from list
-        Destroy(Player.list[e.Client.Id].gameObject);
-    } 
+        if (Player.list.TryGetValue(e.Client.Id, out Player player))
+        {
+            Destroy(player.gameObject);
+        }
+    }
+
+    private void SendSync()
+    {
+        Message message = Message.Create(MessageSendMode.Unreliable, (ushort)ServerToClientId.sync);
+        message.AddUShort(CurrentTick);
+
+        Server.SendToAll(message);
+    }
+
 }
